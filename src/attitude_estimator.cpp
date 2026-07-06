@@ -40,6 +40,12 @@ void AttitudeEstimator::correct(const Vector3& measured_body, const Vector3& ref
 }
 
 void AttitudeEstimator::predict(const Vector3& gyro_body, double dt) {
+    // Defensive guard, consistent with SpacecraftDynamics::step(): a
+    // non-positive dt is a caller error (no time division here today,
+    // but silently integrating backwards on negative dt is just as
+    // wrong) -- treat it as a no-op rather than corrupting the estimate.
+    if (dt <= 0.0) return;
+
     Vector3 corrected_rate = gyro_body - bias_;
 
     if (has_pending_correction_) {

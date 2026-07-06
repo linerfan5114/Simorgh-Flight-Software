@@ -23,6 +23,13 @@ double clampAbs(double v, double max_abs) {
 }
 
 void SpacecraftDynamics::step(const Vector3& torque_command, double dt) {
+    // Guard against a non-positive time step: dt=0 would divide by
+    // zero below (0/0 = NaN), silently corrupting all downstream
+    // state with no diagnostic. A negative dt would silently
+    // integrate backwards. Both are caller errors -- treat as a no-op
+    // rather than corrupting simulation state.
+    if (dt <= 0.0) return;
+
     // Saturate the commanded torque per wheel.
     Vector3 sat_torque(
         clampAbs(torque_command.x, config_.max_wheel_torque),

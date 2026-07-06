@@ -101,6 +101,31 @@ controller, and simulated dynamics together and checks that the
 system actually reaches the commanded attitude -- not just that each
 piece compiles.
 
+A follow-up code review pass (deliberately looking for the kind of
+input-validation and degenerate-case issues real flight software
+reviews flag) found two more:
+
+4. **`Quaternion::fromAxisAngle()` silently returned a non-unit
+   quaternion given a zero-length axis vector.** `Vector3::normalized()`
+   returns `(0,0,0)` for a degenerate input, so the resulting
+   quaternion had a vector part of zero but `w = cos(angle/2)` --
+   not a valid unit quaternion. Most call sites happened to
+   renormalize the result afterward (masking it as an unintended
+   identity rotation), but the function's own contract was broken.
+   Now returns `Quaternion::identity()` explicitly for a degenerate axis.
+5. **`SpacecraftDynamics::step()` divided by `dt` with no validation.**
+   Calling it with `dt = 0` produced a `0 * (1/0)` division that
+   evaluates to `NaN` in IEEE 754, silently corrupting the entire
+   simulation state with no diagnostic. Now rejects `dt <= 0` as a
+   no-op. The same defensive check was added to
+   `AttitudeEstimator::predict()` for consistency, even though it
+   doesn't currently divide by `dt` -- a negative `dt` there would
+   otherwise silently integrate backwards.
+
+Both are covered by regression tests
+(`test_quaternion_from_zero_axis_returns_valid_identity` and
+`test_dynamics_rejects_nonpositive_dt`).
+
 ## Project layout
 
 ```

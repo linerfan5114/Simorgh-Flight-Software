@@ -53,8 +53,15 @@ struct Quaternion {
 
     static Quaternion identity() { return Quaternion(1, 0, 0, 0); }
 
+    // Note: if `axis` is (near) zero-length, normalized() returns
+    // (0,0,0), which would otherwise make this return a NON-UNIT
+    // quaternion (w = cos(half), vector part = 0) rather than a
+    // sensible default. A zero rotation axis is a meaningless/
+    // degenerate request, so we treat it as "no rotation" instead of
+    // silently returning an invalid quaternion.
     static Quaternion fromAxisAngle(const Vector3& axis, double angle_rad) {
         Vector3 a = axis.normalized();
+        if (a.norm() < 1e-9) return Quaternion::identity();
         double half = angle_rad * 0.5;
         double s = std::sin(half);
         return Quaternion(std::cos(half), a.x * s, a.y * s, a.z * s);

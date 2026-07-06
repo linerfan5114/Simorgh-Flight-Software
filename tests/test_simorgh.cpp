@@ -43,6 +43,15 @@ static void test_quaternion_90deg_rotation() {
           "90-degree rotation about Z maps X-axis to Y-axis");
 }
 
+static void test_quaternion_from_zero_axis_returns_valid_identity() {
+    // Regression test: fromAxisAngle used to return a non-unit
+    // quaternion (norm != 1) when given a degenerate zero-length
+    // axis, silently corrupting any attitude math built on top of it.
+    Quaternion q = Quaternion::fromAxisAngle(Vector3(0, 0, 0), 1.5707963);
+    CHECK(std::fabs(q.norm() - 1.0) < 1e-9,
+          "fromAxisAngle with a zero-length axis returns a valid unit quaternion (regression)");
+}
+
 static void test_quaternion_conjugate_inverts_rotation() {
     Quaternion q = Quaternion::fromAxisAngle(Vector3(1, 1, 0), 0.7);
     Vector3 v(0.3, -0.5, 0.9);
@@ -180,15 +189,28 @@ static void test_fault_detection_on_excessive_rate() {
           "no torque is commanded while latched in FAULT mode");
 }
 
+static void test_dynamics_rejects_nonpositive_dt() {
+    // Regression test: dt=0 used to divide by zero internally,
+    // silently corrupting the body rate with NaN.
+    SpacecraftDynamics dyn;
+    dyn.reset(Quaternion::identity(), Vector3(0, 0, 0));
+    dyn.step(Vector3(0.1, 0, 0), 0.0);
+    Vector3 rate = dyn.bodyRate();
+    CHECK(!std::isnan(rate.x) && !std::isnan(rate.y) && !std::isnan(rate.z),
+          "SpacecraftDynamics::step rejects dt=0 instead of producing NaN (regression)");
+}
+
 int main() {
     test_quaternion_identity_rotation();
     test_quaternion_90deg_rotation();
+    test_quaternion_from_zero_axis_returns_valid_identity();
     test_quaternion_conjugate_inverts_rotation();
     test_estimator_tracks_known_rotation();
     test_estimator_corrects_bias_with_vector_measurements();
     test_controller_torque_direction();
     test_full_loop_converges_to_pointing();
     test_fault_detection_on_excessive_rate();
+    test_dynamics_rejects_nonpositive_dt();
 
     std::printf("\n%s\n", g_failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED");
     return g_failures == 0 ? 0 : 1;
